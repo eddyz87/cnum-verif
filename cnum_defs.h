@@ -36,7 +36,7 @@ struct cnum_t FN(from_urange)(ut min, ut max)
 
 struct cnum_t FN(from_srange)(st min, st max)
 {
-	ut size = (ut)(max - min);
+	ut size = (ut)max - (ut)min;
 	ut base = size == UT_MAX ? 0 : (ut)min;
 
 	return (struct cnum_t){ .base = base, .size = size };
@@ -59,7 +59,7 @@ ut FN(umax)(struct cnum_t cnum)
 
 static inline bool FN(srange_overflow)(struct cnum_t cnum)
 {
-	return cnum.base < (ut)ST_MIN && cnum.size >= (ut)ST_MIN - cnum.base;
+	return FN(contains)(cnum, (ut)ST_MAX) && FN(contains)(cnum, (ut)ST_MIN);
 }
 
 st FN(smin)(struct cnum_t cnum)

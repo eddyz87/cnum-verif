@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdarg.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -178,7 +179,26 @@ int main(int argc, char **argv)
 {
 	int errors;
 
-	if (argc > 1) {
+	if (argc == 6 && strcmp(argv[1], "--intersect32") == 0) {
+		u32 a = strtoul(argv[2], NULL, 0);
+		u32 b = strtoul(argv[3], NULL, 0);
+		u32 c = strtoul(argv[4], NULL, 0);
+		u32 d = strtoul(argv[5], NULL, 0);
+		struct cnum32 r1 = cnum32_from_urange(a, b);
+		struct cnum32 r2 = cnum32_from_urange(c, d);
+		struct cnum32 out;
+		bool has = cnum32_intersect(r1, r2, &out);
+
+		printf("[%u,%u] & [%u,%u] = ", a, b, c, d);
+		if (has)
+			printf("{base=%u, size=%u} => u:[%u,%u] s:[%d,%d]\n",
+			       out.base, out.size,
+			       cnum32_umin(out), cnum32_umax(out),
+			       cnum32_smin(out), cnum32_smax(out));
+		else
+			printf("empty\n");
+		return 0;
+	} else if (argc > 1) {
 		unsigned int tid = strtoul(argv[1], NULL, 16);
 		struct cnum8 a = { tid >> 24, tid >> 16 };
 		struct cnum8 b = { tid >> 8, tid };

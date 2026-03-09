@@ -69,4 +69,6 @@ s64 cnum64_smax(struct cnum64 cnum);
 bool cnum64_intersect(struct cnum64 a, struct cnum64 b, struct cnum64 *out);
 bool cnum64_contains(struct cnum64 cnum, u64 v);
 
+struct cnum32 cnum32_from_cnum64(struct cnum64 cnum);
+
 #endif /* _LINUX_CNUM_H */

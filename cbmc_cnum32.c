@@ -2,6 +2,7 @@
 #include <linux/limits.h>
 #include <assert.h>
 
+u64 nondet_u64(void);
 u32 nondet_u32(void);
 s32 nondet_s32(void);
 
@@ -89,6 +90,19 @@ void check_intersect(void)
 		/* non-empty => result is a superset of the true intersection */
 		assert(!in_both || cnum32_contains(c, v));
 	}
+}
+
+void check_32_from_64(void)
+{
+	struct cnum64 a = { nondet_u64(), nondet_u64() };
+	struct cnum32 b = cnum32_from_cnum64(a);
+	u64 v = nondet_u64();
+
+	bool in_a = cnum64_contains(a, v);
+	bool in_b = cnum32_contains(b, (u32)v);
+
+	if (in_a)
+		assert(in_b);
 }
 
 int main(void)

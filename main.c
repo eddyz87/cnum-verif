@@ -198,6 +198,25 @@ int main(int argc, char **argv)
 		else
 			printf("empty\n");
 		return 0;
+	} else if (argc == 6 && strcmp(argv[1], "--intersect6432") == 0) {
+		u64 a = strtoul(argv[2], NULL, 0);
+		u64 b = strtoul(argv[3], NULL, 0);
+		u32 c = strtoul(argv[4], NULL, 0);
+		u32 d = strtoul(argv[5], NULL, 0);
+		struct cnum64 r1 = cnum64_from_urange(a, b);
+		struct cnum32 r2 = cnum32_from_urange(c, d);
+		struct cnum64 out;
+		bool has = cnum64_cnum32_intersect(r1, r2, &out);
+
+		printf("[%lu,%lu] & [%u,%u] = ", a, b, c, d);
+		if (has)
+			printf("{base=%lu, size=%lu} => u:[%lu,%lu] s:[%ld,%ld]\n",
+			       out.base, out.size,
+			       cnum64_umin(out), cnum64_umax(out),
+			       cnum64_smin(out), cnum64_smax(out));
+		else
+			printf("empty\n");
+		return 0;
 	} else if (argc > 1) {
 		unsigned int tid = strtoul(argv[1], NULL, 16);
 		struct cnum8 a = { tid >> 24, tid >> 16 };

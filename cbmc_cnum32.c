@@ -4,7 +4,13 @@
 
 u64 nondet_u64(void);
 u32 nondet_u32(void);
-s32 nondet_s32(void);
+u16 nondet_u16(void);
+u8 nondet_u8(void);
+
+u64 nondet_s64(void);
+u32 nondet_s32(void);
+u16 nondet_s16(void);
+u8 nondet_s8(void);
 
 void check_from_urange(void)
 {
@@ -105,6 +111,98 @@ void check_32_from_64(void)
 		assert(in_b);
 }
 
+void check_cnum64_cnum32_intersect(void)
+{
+	struct cnum64 a = { nondet_u64(), nondet_u64() };
+	struct cnum32 b = { nondet_u32(), nondet_u32() };
+	struct cnum64 c;
+	u64 v = nondet_u64();
+
+	bool in_a = cnum64_contains(a, v);
+	bool in_b = cnum32_contains(b, (u32)v);
+	if (in_a && in_b) {
+		bool isec = cnum64_cnum32_intersect(a, b, &c);
+		assert(isec);
+		assert(cnum64_contains(c, v));
+	}
+}
+
+void check_range64_range32_intersect(void)
+{
+	struct range64 a = { nondet_u64(), nondet_u64() };
+	struct range32 b = { nondet_u32(), nondet_u32() };
+	struct range64 c;
+	u64 v = nondet_u64();
+
+        __CPROVER_assume(a.min <= a.max);
+        __CPROVER_assume(b.min <= b.max);
+
+	bool in_a = a.min <= v && v <= a.max;
+	bool in_b = b.min <= (u32)v && (u32)v <= b.max;
+	if (in_a && in_b) {
+		bool isec = range64_range32_intersect(a, b, &c);
+		assert(isec);
+		assert(c.min <= v && v <= c.max);
+	}
+}
+
+void check_range64_range32_intersect2(void)
+{
+	struct range64 a = { nondet_s64(), nondet_s64() };
+	struct range32 b = { nondet_s32(), nondet_s32() };
+	struct range64 c;
+	s64 v = nondet_s64();
+
+        __CPROVER_assume((s64)a.min <= (s64)a.max);
+        __CPROVER_assume((s32)b.min <= (s32)b.max);
+
+	bool in_a = (s64)a.min <= v && v <= (s64)a.max;
+	bool in_b = (s32)b.min <= (s32)v && (s32)v <= (s32)b.max;
+	if (in_a && in_b) {
+		bool isec = range64_range32_intersect(a, b, &c);
+		assert(isec);
+		assert((s64)c.min <= v && v <= (s64)c.max);
+	}
+}
+
+void check_range64_range32_intersect3(void)
+{
+	struct range64 a = { nondet_s64(), nondet_s64() };
+	struct range32 b = { nondet_u32(), nondet_u32() };
+	struct range64 c;
+	u64 v = nondet_u64();
+
+        __CPROVER_assume((s64)a.min <= (s64)a.max);
+        __CPROVER_assume((u32)b.min <= (u32)b.max);
+
+	bool in_a = (s64)a.min <= (s64)v && (s64)v <= (s64)a.max;
+	bool in_b = (u32)b.min <= (u32)v && (u32)v <= (u32)b.max;
+	if (in_a && in_b) {
+		bool isec = range64_range32_intersect(a, b, &c);
+		assert(isec);
+		assert((s64)c.min <= (s64)v && (s64)v <= (s64)c.max);
+	}
+}
+
+void check_range64_range32_intersect4(void)
+{
+	struct range64 a = { nondet_u64(), nondet_u64() };
+	struct range32 b = { nondet_s32(), nondet_s32() };
+	struct range64 c;
+	u64 v = nondet_u64();
+
+        __CPROVER_assume((u64)a.min <= (u64)a.max);
+        __CPROVER_assume((s32)b.min <= (s32)b.max);
+
+	bool in_a = (u64)a.min <= (u64)v && (u64)v <= (u64)a.max;
+	bool in_b = (s32)b.min <= (s32)v && (s32)v <= (s32)b.max;
+	if (in_a && in_b) {
+		bool isec = range64_range32_intersect(a, b, &c);
+		assert(isec);
+		assert((u64)c.min <= (u64)v && (u64)v <= (u64)c.max);
+	}
+}
+
 int main(void)
 {
 	check_from_urange();
@@ -112,5 +210,10 @@ int main(void)
 	check_umin_umax();
 	check_smin_smax();
 	check_intersect();
+	check_cnum64_cnum32_intersect();
+	check_range64_range32_intersect();
+	check_range64_range32_intersect2();
+	check_range64_range32_intersect3();
+	check_range64_range32_intersect4();
 	return 0;
 }

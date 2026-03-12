@@ -21,6 +21,20 @@ s8 cnum8_smax(struct cnum8 cnum);
 bool cnum8_intersect(struct cnum8 a, struct cnum8 b, struct cnum8 *out);
 bool cnum8_contains(struct cnum8 cnum, u8 v);
 
+struct cnum16 {
+	u16 base;
+	u16 size;
+};
+
+struct cnum16 cnum16_from_urange(u16 min, u16 max);
+struct cnum16 cnum16_from_srange(s16 min, s16 max);
+u16 cnum16_umin(struct cnum16 cnum);
+u16 cnum16_umax(struct cnum16 cnum);
+s16 cnum16_smin(struct cnum16 cnum);
+s16 cnum16_smax(struct cnum16 cnum);
+bool cnum16_intersect(struct cnum16 a, struct cnum16 b, struct cnum16 *out);
+bool cnum16_contains(struct cnum16 cnum, u16 v);
+
 /*
  * cnum32: a circular number.
  * A unified representation for signed and unsigned ranges.
@@ -70,5 +84,19 @@ bool cnum64_intersect(struct cnum64 a, struct cnum64 b, struct cnum64 *out);
 bool cnum64_contains(struct cnum64 cnum, u64 v);
 
 struct cnum32 cnum32_from_cnum64(struct cnum64 cnum);
+bool cnum16_cnum8_intersect(struct cnum16 a, struct cnum8 b, struct cnum16 *out);
+bool cnum64_cnum32_intersect(struct cnum64 a, struct cnum32 b, struct cnum64 *out);
+
+struct range32 {
+	u32 min;
+	u32 max;
+};
+
+struct range64 {
+	u64 min;
+	u64 max;
+};
+
+bool range64_range32_intersect(struct range64 ra, struct range32 rb, struct range64 *out);
 
 #endif /* _LINUX_CNUM_H */

@@ -127,6 +127,82 @@ void check_cnum64_cnum32_intersect(void)
 	}
 }
 
+void check_range16_range8_intersect_uu(void)
+{
+	struct range16 a = { nondet_u16(), nondet_u16() };
+	struct range8 b = { nondet_u8(), nondet_u8() };
+	struct range16 c;
+	u16 v = nondet_u16();
+
+	__CPROVER_assume(a.min <= a.max);
+	__CPROVER_assume(b.min <= b.max);
+
+	bool in_a = a.min <= v && v <= a.max;
+	bool in_b = b.min <= (u8)v && (u8)v <= b.max;
+	if (in_a && in_b) {
+		bool isec = range16_range8_intersect(a, b, &c);
+		assert(isec);
+		assert(c.min <= v && v <= c.max);
+	}
+}
+
+void check_range16_range8_intersect_ss(void)
+{
+	struct range16 a = { nondet_s16(), nondet_s16() };
+	struct range8 b = { nondet_s8(), nondet_s8() };
+	struct range16 c;
+	s16 v = nondet_s16();
+
+	__CPROVER_assume((s16)a.min <= (s16)a.max);
+	__CPROVER_assume((s8)b.min <= (s8)b.max);
+
+	bool in_a = (s16)a.min <= v && v <= (s16)a.max;
+	bool in_b = (s8)b.min <= (s8)v && (s8)v <= (s8)b.max;
+	if (in_a && in_b) {
+		bool isec = range16_range8_intersect(a, b, &c);
+		assert(isec);
+		assert((s16)c.min <= v && v <= (s16)c.max);
+	}
+}
+
+void check_range16_range8_intersect_su(void)
+{
+	struct range16 a = { nondet_s16(), nondet_s16() };
+	struct range8 b = { nondet_u8(), nondet_u8() };
+	struct range16 c;
+	u16 v = nondet_u16();
+
+	__CPROVER_assume((s16)a.min <= (s16)a.max);
+	__CPROVER_assume(b.min <= b.max);
+
+	bool in_a = (s16)a.min <= (s16)v && (s16)v <= (s16)a.max;
+	bool in_b = b.min <= (u8)v && (u8)v <= b.max;
+	if (in_a && in_b) {
+		bool isec = range16_range8_intersect(a, b, &c);
+		assert(isec);
+		assert((s16)c.min <= (s16)v && (s16)v <= (s16)c.max);
+	}
+}
+
+void check_range16_range8_intersect_us(void)
+{
+	struct range16 a = { nondet_u16(), nondet_u16() };
+	struct range8 b = { nondet_s8(), nondet_s8() };
+	struct range16 c;
+	u16 v = nondet_u16();
+
+	__CPROVER_assume(a.min <= a.max);
+	__CPROVER_assume((s8)b.min <= (s8)b.max);
+
+	bool in_a = a.min <= v && v <= a.max;
+	bool in_b = (s8)b.min <= (s8)v && (s8)v <= (s8)b.max;
+	if (in_a && in_b) {
+		bool isec = range16_range8_intersect(a, b, &c);
+		assert(isec);
+		assert(c.min <= v && v <= c.max);
+	}
+}
+
 void check_range64_range32_intersect(void)
 {
 	struct range64 a = { nondet_u64(), nondet_u64() };

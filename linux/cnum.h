@@ -87,6 +87,16 @@ struct cnum32 cnum32_from_cnum64(struct cnum64 cnum);
 bool cnum16_cnum8_intersect(struct cnum16 a, struct cnum8 b, struct cnum16 *out);
 bool cnum64_cnum32_intersect(struct cnum64 a, struct cnum32 b, struct cnum64 *out);
 
+struct range8 {
+	u8 min;
+	u8 max;
+};
+
+struct range16 {
+	u16 min;
+	u16 max;
+};
+
 struct range32 {
 	u32 min;
 	u32 max;
@@ -97,6 +107,7 @@ struct range64 {
 	u64 max;
 };
 
+bool range16_range8_intersect(struct range16 ra, struct range8 rb, struct range16 *out);
 bool range64_range32_intersect(struct range64 ra, struct range32 rb, struct range64 *out);
 
 #endif /* _LINUX_CNUM_H */

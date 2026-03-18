@@ -168,79 +168,101 @@ bool cnum64_cnum32_intersect(struct cnum64 a, struct cnum32 b, struct cnum64 *ou
 	return true;
 }
 
+/* Replace low 8 bits of x with y, keeping upper 8 bits. */
+static __always_inline u16 swap_low8(u16 x, u8 y)
+{
+	return (x & 0xff00) | y;
+}
+
+/* Move to the next / previous 2^8-aligned block. */
+static __always_inline u16 next_u8_block(u16 x) { return x + (1U << 8); }
+static __always_inline u16 prev_u8_block(u16 x) { return x - (1U << 8); }
+
+/* Is v within the circular u16 range [base, base + len]? */
+static __always_inline bool u16_range_contains(u16 v, u16 base, u16 len)
+{
+	return (u16)(v - base) <= len;
+}
+
+static __always_inline bool u8_range_contains(u8 v, u8 base, u8 len)
+{
+	return (u8)(v - base) <= len;
+}
+
+bool range16_range8_intersect(struct range16 a, struct range8 b, struct range16 *out)
+{
+        u16 b_len = (u8)(b.max - b.min);
+	u16 a_len = a.max - a.min;
+	u16 lo, hi;
+
+	if (u8_range_contains((u8)a.min, (u8)b.min, b_len)) {
+		lo = a.min;
+	} else {
+		lo = swap_low8(a.min, (u8)b.min);
+		if (!u16_range_contains(lo, a.min, a_len))
+			lo = next_u8_block(lo);
+		if (!u16_range_contains(lo, a.min, a_len))
+			return false;
+	}
+	if (u8_range_contains((u8)a.max, (u8)b.min, b_len)) {
+		hi = a.max;
+	} else {
+		hi = swap_low8(a.max, (u8)b.max);
+		if (!u16_range_contains(hi, a.min, a_len))
+			hi = prev_u8_block(hi);
+		if (!u16_range_contains(hi, a.min, a_len))
+			return false;
+	}
+	*out = (struct range16){ lo, hi };
+	return true;
+}
+
+/* Replace low 32 bits of x with y, keeping upper 32 bits. */
+static __always_inline u64 swap_low32(u64 x, u32 y)
+{
+	return (x & 0xffffffff00000000ULL) | y;
+}
+
+/* Move to the next / previous 2^32-aligned block. */
+static __always_inline u64 next_u32_block(u64 x) { return x + (1ULL << 32); }
+static __always_inline u64 prev_u32_block(u64 x) { return x - (1ULL << 32); }
+
+/* Is v within the circular u64 range [base, base + len]? */
+static __always_inline bool u64_range_contains(u64 v, u64 base, u64 len)
+{
+	return v - base <= len;
+}
+
+/* Is v within the circular u32 range [base, base + len]? */
+static __always_inline bool u32_range_contains(u32 v, u32 base, u32 len)
+{
+	return v - base <= len;
+}
+
 bool range64_range32_intersect(struct range64 a, struct range32 b, struct range64 *out)
 {
-	/*
-	 * To simplify the reasoning, shift the intervals a -> a1, b -> b1,
-	 * such that a1 starts at origin.
-	 */
-	struct range64 a1 = { 0, a.max - a.min };
-	struct range32 b1 = { b.min - (u32)a.min, b.max - (u32)a.min };
-	struct range64 t = a;
-	u64 d;
+	u64 b_len = (u32)(b.max - b.min);
+	u64 a_len = a.max - a.min;
+	u64 lo, hi;
 
-	if (b1.max < b1.min) {
-		if ((u32)a1.max > b1.max && (u32)a1.max < b1.min) {
-			/*
-			 * N*2^32                   (N+1)*2^32
-			 * ||=====|------------|=====||=====|---------|---|=====||
-			 *  |b1 ->|            |<- b1||b1 ->|         |   |<- b1|
-			 *  |<----------------- a1 ------------------>|
-			 *  |<----------- new t ----------->|<-- d -->|
-			 *                                  ^
-			 *                                b1.max
-			 */
-			d = (u32)a1.max - b1.max;
-			t.max -= d;
-		} else {
-			/*
-			 * No adjustments possible in the following cases:
-			 *
-			 * ||=====|------------|=====||===|=|-------------|=|===||
-			 *  |b1 ->|            |<- b1||b1 +>|             |<+ b1|
-			 *  |<----------------- a1 ------>|                 |
-			 *  |<----------------- (or) a1 ------------------->|
-			 */
-		}
+	if (u32_range_contains((u32)a.min, (u32)b.min, b_len)) {
+		lo = a.min;
 	} else {
-		if (a1.max < b1.min)
-			/*
-			 * N*2^32                   (N+1)*2^32
-			 * ||----------|--|=======|--||------>
-			 *  |<-- a1 -->|  |<- b ->|
-			 */
+		lo = swap_low32(a.min, (u32)b.min);
+		if (!u64_range_contains(lo, a.min, a_len))
+			lo = next_u32_block(lo);
+		if (!u64_range_contains(lo, a.min, a_len))
 			return false;
-		/*
-		 * N*2^32                   (N+1)*2^32
-		 * ||-------------|========|-||-----| -------|========|-||
-		 *  |             |<- b1 ->|        |        |<- b1 ->|
-		 *  |<------------+-- a1 --+------->|
-		 *                |<---- new t ---->|
-		 */
-		t.min += b1.min;
-		d = 0;
-		if ((u32)a1.max < b1.min)
-			/*
-			 * N*2^32                   (N+1)*2^32
-			 * ||----------|===========|-||------|----|===========|-||
-			 *  |          |<-- b1  -->|         |    |<-- b1  -->|
-			 *  |<---------+---- a1 ---+-------->|
-			 *             |<- new t ->|<-- d -->|
-			 */
-			d = (u32)a1.max + (BIT_ULL(32) - b1.max);
-		else if ((u32)a1.max >= b1.max)
-			/*
-			 * N*2^32                   (N+1)*2^32
-			 * ||--|========|------------||--|========|-------|-----||
-			 *  |  |<- b1 ->|                |<- b1 ->|       |
-			 *  |<-+------------------ a1 ------------+------>|
-			 *     |<------------ new t ------------->|<- d ->|
-			 */
-			d = (u32)a1.max - b1.max;
-		if (t.max - t.min < d)
-			return false;
-		t.max -= d;
 	}
-	*out = t;
+	if (u32_range_contains(a.max, (u32)b.min, b_len)) {
+		hi = a.max;
+	} else {
+		hi = swap_low32(a.max, (u32)b.max);
+		if (!u64_range_contains(hi, a.min, a_len))
+			hi = prev_u32_block(hi);
+		if (!u64_range_contains(hi, a.min, a_len))
+			return false;
+	}
+	*out = (struct range64){ lo, hi };
 	return true;
 }

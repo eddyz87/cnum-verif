@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <unistd.h>
@@ -9,161 +8,140 @@
 #include <linux/cnum.h>
 #include <linux/limits.h>
 
-/* 1 (full circle) + 256*255 (all others) = 65281 */
-static struct cnum8 all_cnums[65281];
-static int cnums_cnt;
-
-static void init_all_cnums(void)
-{
-	int i, j, k;
-
-	k = 0;
-	all_cnums[k++] = (struct cnum8){0, U8_MAX};
-	for (i = 0; i <= U8_MAX; i++)
-		for (j = 0; j <= U8_MAX - 1; j++)
-			all_cnums[k++] = (struct cnum8){i, j};
-	cnums_cnt = k;
-}
-
-static pthread_mutex_t report_lock = PTHREAD_MUTEX_INITIALIZER;
-
-static int __attribute__((format(printf, 1, 2)))
-report_error(const char *fmt, ...)
-{
-	va_list ap;
-
-	pthread_mutex_lock(&report_lock);
-	va_start(ap, fmt);
-	vprintf(fmt, ap);
-	va_end(ap);
-	pthread_mutex_unlock(&report_lock);
-	return 1;
-}
-
-static int test_intersect_once(struct cnum8 a, struct cnum8 b)
-{
-	unsigned int tid = (a.base << 24) | (a.size << 16) | (b.base << 8) | b.size;
-	struct cnum8 c;
-	bool has_isect = cnum8_intersect(a, b, &c);
-	struct cnum8 smaller = a.size < b.size ? a : b;
-	int v, sub_ranges = 0;
-	bool prev_in;
-
-	/* count how many disjoint intervals a and b intersect in */
-	prev_in = cnum8_contains(a, U8_MAX) && cnum8_contains(b, U8_MAX);
-	for (v = 0; v <= U8_MAX; v++) {
-		bool cur_in = cnum8_contains(a, v) && cnum8_contains(b, v);
-		if (cur_in && !prev_in)
-			sub_ranges++;
-		prev_in = cur_in;
-	}
-	if (sub_ranges == 0 && prev_in)
-		sub_ranges = 1;
-
-	switch (sub_ranges) {
-	case 0:
-		if (has_isect)
-			return report_error("FAIL [%08x]: ({%02x,%02x}, {%02x,%02x}) "
-					    "expected empty, got {%02x,%02x}\n",
-					    tid, a.base, a.size, b.base, b.size,
-					    c.base, c.size);
-		break;
-	case 1:
-		if (!has_isect)
-			return report_error("FAIL [%08x]: ({%02x,%02x}, {%02x,%02x}) "
-					    "expected non-empty, got empty\n",
-					    tid, a.base, a.size, b.base, b.size);
-		for (v = 0; v <= U8_MAX; v++) {
-			bool in_both = cnum8_contains(a, v) && cnum8_contains(b, v);
-			if (in_both != cnum8_contains(c, v))
-				return report_error("FAIL [%08x]: ({%02x,%02x}, {%02x,%02x}) = "
-						    "{%02x,%02x} mismatch at %02x\n",
-						    tid, a.base, a.size, b.base, b.size,
-						    c.base, c.size, v);
-		}
-		break;
-	default:
-		if (!has_isect)
-			return report_error("FAIL [%08x]: ({%02x,%02x}, {%02x,%02x}) "
-					    "expected non-empty, got empty\n",
-					    tid, a.base, a.size, b.base, b.size);
-		if (c.base != smaller.base || c.size != smaller.size)
-			return report_error("FAIL [%08x]: ({%02x,%02x}, {%02x,%02x}) = "
-					    "{%02x,%02x} should be smaller {%02x,%02x}\n",
-					    tid, a.base, a.size, b.base, b.size,
-					    c.base, c.size, smaller.base, smaller.size);
-		break;
-	}
-	return 0;
-}
-
 #define MAX_ERRORS 20
 
-static atomic_int progress;
 static atomic_int total_errors;
+static atomic_int progress;
+static atomic_long total_result_size;
+static atomic_long total_true_size;
+static atomic_long total_pairs;
 
 struct thread_arg {
-	int start;
-	int end;
+	int a_base_start;
+	int a_base_end;
 };
 
-static void *test_intersect_thread(void *arg)
+static int abort_on_first;
+
+static void *test_mul_thread(void *arg)
 {
 	struct thread_arg *ta = arg;
-	int i, j, errors = 0, done = 0;
+	int a_base, a_size, b_base, b_size, v, w;
+	long local_result = 0, local_true = 0, local_pairs = 0;
 
-	for (i = ta->start; i < ta->end; i++) {
-		for (j = i; j < cnums_cnt; j++) {
-			errors += test_intersect_once(all_cnums[i], all_cnums[j]);
-			if (atomic_load(&total_errors) + errors >= MAX_ERRORS)
-				goto out;
+	for (a_base = ta->a_base_start; a_base < ta->a_base_end; a_base++) {
+		for (a_size = 0; a_size <= U8_MAX; a_size++) {
+			struct cnum8 a = { a_base, a_size };
+			if ((a.size > (u8)(U8_MAX - a.base)))
+				continue;
+			if (a_base <= S8_MAX && a_base + a_size >= (u8)S8_MIN)
+				continue;
+			for (b_base = 0; b_base <= U8_MAX; b_base++)
+			for (b_size = 0; b_size <= U8_MAX; b_size++) {
+				struct cnum8 b = { b_base, b_size };
+				if ((b.size > (u8)(U8_MAX - b.base)))
+					continue;
+				if (b_base <= S8_MAX && b_base + b_size >= (u8)S8_MIN)
+					continue;
+				struct cnum8 r = cnum8_mul(a, b);
+				u8 seen[256 / 8] = {};
+				int true_cnt = 0;
+				for (v = a_base; v <= a_base + a_size; v++)
+				for (w = b_base; w <= b_base + b_size; w++) {
+					u8 prod = (u8)(v * w);
+					if (!(seen[prod / 8] & (1 << (prod % 8)))) {
+						seen[prod / 8] |= (1 << (prod % 8));
+						true_cnt++;
+					}
+					if (!cnum8_contains(r, prod)) {
+						printf("FAIL: a={%d,%d} b={%d,%d} r={%d,%d} "
+						       "v=%d w=%d prod=%d\n",
+						       a_base, a_size, b_base, b_size,
+						       r.base, r.size, v, w, prod);
+						if (abort_on_first ||
+						    atomic_fetch_add(&total_errors, 1) + 1 >= MAX_ERRORS)
+							return NULL;
+					}
+				}
+				local_result += (int)r.size + 1;
+				local_true += true_cnt;
+				local_pairs++;
+			}
 		}
-		if (++done % 100 == 0)
-			atomic_fetch_add(&progress, 100);
+		atomic_fetch_add(&progress, 1);
 	}
-out:
-	atomic_fetch_add(&progress, done % 100);
-	atomic_fetch_add(&total_errors, errors);
+	atomic_fetch_add(&total_result_size, local_result);
+	atomic_fetch_add(&total_true_size, local_true);
+	atomic_fetch_add(&total_pairs, local_pairs);
 	return NULL;
 }
 
-static int test_intersect(void)
+int main(int argc, char **argv)
 {
-	int ncpus = sysconf(_SC_NPROCESSORS_ONLN);
+	int i, ncpus = sysconf(_SC_NPROCESSORS_ONLN);
+
+	if (argc == 4 && strcmp(argv[1], "--cut") == 0) {
+		struct cnum8 a = { strtoul(argv[2], NULL, 0), strtoul(argv[3], NULL, 0) };
+		struct cnum8 chunks[3];
+		int n = cnum8_cut(a, chunks);
+
+		printf("{%u,%u} => %d chunks:", a.base, a.size, n);
+		for (i = 0; i < n; i++)
+			printf(" {%u,%u}[%u..%u]", chunks[i].base, chunks[i].size,
+			       chunks[i].base, (u8)(chunks[i].base + chunks[i].size));
+		printf("\n");
+		return 0;
+	}
+
+	if (argc == 6 && strcmp(argv[1], "--mul") == 0) {
+		struct cnum8 a = { strtoul(argv[2], NULL, 0), strtoul(argv[3], NULL, 0) };
+		struct cnum8 b = { strtoul(argv[4], NULL, 0), strtoul(argv[5], NULL, 0) };
+		struct cnum8 r = cnum8_mul(a, b);
+
+		printf("{%u,%u} * {%u,%u} = {%u,%u} u:[%u..%u] s:[%d..%d]\n",
+		       a.base, a.size, b.base, b.size,
+		       r.base, r.size,
+		       cnum8_umin(r), cnum8_umax(r),
+		       cnum8_smin(r), cnum8_smax(r));
+		return 0;
+	}
+
+	if (argc > 1 && strcmp(argv[1], "--single") == 0) {
+		ncpus = 1;
+		abort_on_first = 1;
+	}
 	pthread_t *threads;
 	struct thread_arg *args;
-	int i, rows_per_thread, leftover;
+	int per, leftover, start;
 
 	if (ncpus < 1)
 		ncpus = 1;
 	threads = calloc(ncpus, sizeof(*threads));
 	args = calloc(ncpus, sizeof(*args));
 
-	atomic_store(&progress, 0);
 	atomic_store(&total_errors, 0);
+	atomic_store(&progress, 0);
 
-	printf("running on %d threads\n", ncpus);
-
-	rows_per_thread = cnums_cnt / ncpus;
-	leftover = cnums_cnt % ncpus;
-	int start = 0;
+	per = 256 / ncpus;
+	leftover = 256 % ncpus;
+	start = 0;
 	for (i = 0; i < ncpus; i++) {
-		int count = rows_per_thread + (i < leftover ? 1 : 0);
-		args[i].start = start;
-		args[i].end = start + count;
-		start += count;
-		pthread_create(&threads[i], NULL, test_intersect_thread, &args[i]);
+		int cnt = per + (i < leftover ? 1 : 0);
+		args[i].a_base_start = start;
+		args[i].a_base_end = start + cnt;
+		start += cnt;
+		pthread_create(&threads[i], NULL, test_mul_thread, &args[i]);
 	}
 
-	/* progress reporting from main thread */
+	printf("testing mul on %d threads\n", ncpus);
 	while (1) {
 		int done = atomic_load(&progress);
 		int errs = atomic_load(&total_errors);
-		printf("\r%d / %d (%d%%), %d errors", done, cnums_cnt, done * 100 / cnums_cnt, errs);
+		printf("\r%d / 256 (%d%%), %d errors", done, done * 100 / 256, errs);
 		fflush(stdout);
-		if (done >= cnums_cnt || errs >= MAX_ERRORS)
+		if (done >= 256 || errs >= MAX_ERRORS)
 			break;
-		usleep(50000);
+		usleep(200000);
 	}
 	printf("\n");
 
@@ -172,64 +150,14 @@ static int test_intersect(void)
 
 	free(threads);
 	free(args);
-	return atomic_load(&total_errors);
-}
 
-int main(int argc, char **argv)
-{
-	int errors;
-
-	if (argc == 6 && strcmp(argv[1], "--intersect32") == 0) {
-		u32 a = strtoul(argv[2], NULL, 0);
-		u32 b = strtoul(argv[3], NULL, 0);
-		u32 c = strtoul(argv[4], NULL, 0);
-		u32 d = strtoul(argv[5], NULL, 0);
-		struct cnum32 r1 = cnum32_from_urange(a, b);
-		struct cnum32 r2 = cnum32_from_urange(c, d);
-		struct cnum32 out;
-		bool has = cnum32_intersect(r1, r2, &out);
-
-		printf("[%u,%u] & [%u,%u] = ", a, b, c, d);
-		if (has)
-			printf("{base=%u, size=%u} => u:[%u,%u] s:[%d,%d]\n",
-			       out.base, out.size,
-			       cnum32_umin(out), cnum32_umax(out),
-			       cnum32_smin(out), cnum32_smax(out));
-		else
-			printf("empty\n");
-		return 0;
-	} else if (argc == 6 && strcmp(argv[1], "--intersect6432") == 0) {
-		u64 a = strtoul(argv[2], NULL, 0);
-		u64 b = strtoul(argv[3], NULL, 0);
-		u32 c = strtoul(argv[4], NULL, 0);
-		u32 d = strtoul(argv[5], NULL, 0);
-		struct cnum64 r1 = cnum64_from_urange(a, b);
-		struct cnum32 r2 = cnum32_from_urange(c, d);
-		struct cnum64 out;
-		bool has = cnum64_cnum32_intersect(r1, r2, &out);
-
-		printf("[%lu,%lu] & [%u,%u] = ", a, b, c, d);
-		if (has)
-			printf("{base=%lu, size=%lu} => u:[%lu,%lu] s:[%ld,%ld]\n",
-			       out.base, out.size,
-			       cnum64_umin(out), cnum64_umax(out),
-			       cnum64_smin(out), cnum64_smax(out));
-		else
-			printf("empty\n");
-		return 0;
-	} else if (argc > 1) {
-		unsigned int tid = strtoul(argv[1], NULL, 16);
-		struct cnum8 a = { tid >> 24, tid >> 16 };
-		struct cnum8 b = { tid >> 8, tid };
-
-		errors = test_intersect_once(a, b);
-	} else {
-		init_all_cnums();
-		printf("all_cnums: %d entries\n", cnums_cnt);
-
-		errors = test_intersect();
-		printf("test_intersect: %d errors\n", errors);
-	}
-
+	int errors = atomic_load(&total_errors);
+	long res = atomic_load(&total_result_size);
+	long tru = atomic_load(&total_true_size);
+	long pairs = atomic_load(&total_pairs);
+	printf("test_mul: %d errors\n", errors);
+	printf("pairs: %ld, avg result: %.2f, avg true: %.2f, avg overapprox: %.2f (%.1f%%)\n",
+	       pairs, (double)res / pairs, (double)tru / pairs,
+	       (double)(res - tru) / pairs, (double)(res - tru) / tru * 100);
 	return errors ? 1 : 0;
 }

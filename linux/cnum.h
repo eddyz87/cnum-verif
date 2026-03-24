@@ -20,6 +20,8 @@ s8 cnum8_smin(struct cnum8 cnum);
 s8 cnum8_smax(struct cnum8 cnum);
 bool cnum8_intersect(struct cnum8 a, struct cnum8 b, struct cnum8 *out);
 bool cnum8_contains(struct cnum8 cnum, u8 v);
+struct cnum8 cnum8_mul(struct cnum8 a, struct cnum8 b);
+int cnum8_cut(struct cnum8 a, struct cnum8 chunks[3]);
 
 struct cnum16 {
 	u16 base;

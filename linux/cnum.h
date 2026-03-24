@@ -20,6 +20,9 @@ s8 cnum8_smin(struct cnum8 cnum);
 s8 cnum8_smax(struct cnum8 cnum);
 bool cnum8_intersect(struct cnum8 a, struct cnum8 b, struct cnum8 *out);
 bool cnum8_contains(struct cnum8 cnum, u8 v);
+struct cnum8 cnum8_mul(struct cnum8 a, struct cnum8 b);
+int cnum8_cut(struct cnum8 a, struct cnum8 chunks[3]);
+struct cnum8 cnum8_negate(struct cnum8 a);
 
 struct cnum16 {
 	u16 base;
@@ -67,6 +70,7 @@ s32 cnum32_smin(struct cnum32 cnum);
 s32 cnum32_smax(struct cnum32 cnum);
 bool cnum32_intersect(struct cnum32 a, struct cnum32 b, struct cnum32 *out);
 bool cnum32_contains(struct cnum32 cnum, u32 v);
+struct cnum32 cnum32_mul(struct cnum32 a, struct cnum32 b);
 
 /* Same as cnum32 but for 64-bit ranges */
 struct cnum64 {
@@ -82,6 +86,7 @@ s64 cnum64_smin(struct cnum64 cnum);
 s64 cnum64_smax(struct cnum64 cnum);
 bool cnum64_intersect(struct cnum64 a, struct cnum64 b, struct cnum64 *out);
 bool cnum64_contains(struct cnum64 cnum, u64 v);
+struct cnum64 cnum64_mul(struct cnum64 a, struct cnum64 b);
 
 struct cnum32 cnum32_from_cnum64(struct cnum64 cnum);
 bool cnum16_cnum8_intersect(struct cnum16 a, struct cnum8 b, struct cnum16 *out);

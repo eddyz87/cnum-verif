@@ -1,18 +1,20 @@
 CC = gcc
 CFLAGS = -Wall -Werror -O2 -g -I. -flto
-LDFLAGS = -pthread
-TARGET = cnum-test
-HEADERS = cnum_defs.h $(wildcard linux/*.h)
+HEADERS = cnum_defs.h checks.h $(wildcard linux/*.h)
+SRCS = checks.c cnum.c
 
-all: $(TARGET)
+all: mul8-brute-force cbmc
 
-$(TARGET): main.c cnum.c $(HEADERS)
-	bear -- $(CC) $(CFLAGS) $(LDFLAGS) -o $@ main.c cnum.c
+mul8-brute-force: mul8_brute_force.c cnum.c $(HEADERS)
+	$(CC) $(CFLAGS) -pthread -o $@ mul8_brute_force.c cnum.c
+
+cbmc: $(SRCS) $(HEADERS)
+	cbmc -I. $(SRCS)
+
+compile-check: $(SRCS) $(HEADERS)
+	$(CC) $(CFLAGS) -fsyntax-only checks.c
 
 clean:
-	rm -f $(TARGET) compile_commands.json
+	rm -f compile_commands.json mul8-brute-force
 
-cbmc: cbmc_cnum32.c cnum.c $(HEADERS)
-	cbmc -I. cbmc_cnum32.c cnum.c
-
-.PHONY: all clean cbmc
+.PHONY: all clean cbmc compile-check

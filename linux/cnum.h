@@ -1,39 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0-only
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2026 Meta Platforms, Inc. and affiliates. */
 
 #ifndef _LINUX_CNUM_H
 #define _LINUX_CNUM_H
 
 #include <linux/types.h>
-
-/* cnum8 is used locally for exhaustive testing */
-struct cnum8 {
-	u8 base;
-	u8 size;
-};
-
-struct cnum8 cnum8_from_urange(u8 min, u8 max);
-struct cnum8 cnum8_from_srange(s8 min, s8 max);
-u8 cnum8_umin(struct cnum8 cnum);
-u8 cnum8_umax(struct cnum8 cnum);
-s8 cnum8_smin(struct cnum8 cnum);
-s8 cnum8_smax(struct cnum8 cnum);
-bool cnum8_intersect(struct cnum8 a, struct cnum8 b, struct cnum8 *out);
-bool cnum8_contains(struct cnum8 cnum, u8 v);
-
-struct cnum16 {
-	u16 base;
-	u16 size;
-};
-
-struct cnum16 cnum16_from_urange(u16 min, u16 max);
-struct cnum16 cnum16_from_srange(s16 min, s16 max);
-u16 cnum16_umin(struct cnum16 cnum);
-u16 cnum16_umax(struct cnum16 cnum);
-s16 cnum16_smin(struct cnum16 cnum);
-s16 cnum16_smax(struct cnum16 cnum);
-bool cnum16_intersect(struct cnum16 a, struct cnum16 b, struct cnum16 *out);
-bool cnum16_contains(struct cnum16 cnum, u16 v);
 
 /*
  * cnum32: a circular number.
@@ -59,14 +30,27 @@ struct cnum32 {
 	u32 size;
 };
 
+#define CNUM32_UNBOUNDED ((struct cnum32){ .base = 0, .size = U32_MAX })
+#define CNUM32_EMPTY ((struct cnum32){ .base = U32_MAX, .size = U32_MAX })
+
 struct cnum32 cnum32_from_urange(u32 min, u32 max);
 struct cnum32 cnum32_from_srange(s32 min, s32 max);
 u32 cnum32_umin(struct cnum32 cnum);
 u32 cnum32_umax(struct cnum32 cnum);
 s32 cnum32_smin(struct cnum32 cnum);
 s32 cnum32_smax(struct cnum32 cnum);
-bool cnum32_intersect(struct cnum32 a, struct cnum32 b, struct cnum32 *out);
+struct cnum32 cnum32_intersect(struct cnum32 a, struct cnum32 b);
+void cnum32_intersect_with(struct cnum32 *dst, struct cnum32 src);
+void cnum32_intersect_with_urange(struct cnum32 *dst, u32 min, u32 max);
+void cnum32_intersect_with_srange(struct cnum32 *dst, s32 min, s32 max);
 bool cnum32_contains(struct cnum32 cnum, u32 v);
+bool cnum32_is_const(struct cnum32 cnum);
+bool cnum32_is_empty(struct cnum32 cnum);
+struct cnum32 cnum32_add(struct cnum32 a, struct cnum32 b);
+struct cnum32 cnum32_normalize(struct cnum32 cnum);
+struct cnum32 cnum32_negate(struct cnum32 a);
+bool cnum32_urange_overflow(struct cnum32 a);
+bool cnum32_srange_overflow(struct cnum32 a);
 
 /* Same as cnum32 but for 64-bit ranges */
 struct cnum64 {
@@ -74,40 +58,29 @@ struct cnum64 {
 	u64 size;
 };
 
+#define CNUM64_UNBOUNDED ((struct cnum64){ .base = 0, .size = U64_MAX })
+#define CNUM64_EMPTY ((struct cnum64){ .base = U64_MAX, .size = U64_MAX })
+
 struct cnum64 cnum64_from_urange(u64 min, u64 max);
 struct cnum64 cnum64_from_srange(s64 min, s64 max);
 u64 cnum64_umin(struct cnum64 cnum);
 u64 cnum64_umax(struct cnum64 cnum);
 s64 cnum64_smin(struct cnum64 cnum);
 s64 cnum64_smax(struct cnum64 cnum);
-bool cnum64_intersect(struct cnum64 a, struct cnum64 b, struct cnum64 *out);
+struct cnum64 cnum64_intersect(struct cnum64 a, struct cnum64 b);
+void cnum64_intersect_with(struct cnum64 *dst, struct cnum64 src);
+void cnum64_intersect_with_urange(struct cnum64 *dst, u64 min, u64 max);
+void cnum64_intersect_with_srange(struct cnum64 *dst, s64 min, s64 max);
 bool cnum64_contains(struct cnum64 cnum, u64 v);
+bool cnum64_is_const(struct cnum64 cnum);
+bool cnum64_is_empty(struct cnum64 cnum);
+struct cnum64 cnum64_add(struct cnum64 a, struct cnum64 b);
+struct cnum64 cnum64_normalize(struct cnum64 cnum);
+struct cnum64 cnum64_negate(struct cnum64 a);
+bool cnum64_urange_overflow(struct cnum64 a);
+bool cnum64_srange_overflow(struct cnum64 a);
 
 struct cnum32 cnum32_from_cnum64(struct cnum64 cnum);
-bool cnum16_cnum8_intersect(struct cnum16 a, struct cnum8 b, struct cnum16 *out);
-bool cnum64_cnum32_intersect(struct cnum64 a, struct cnum32 b, struct cnum64 *out);
-
-struct range8 {
-	u8 min;
-	u8 max;
-};
-
-struct range16 {
-	u16 min;
-	u16 max;
-};
-
-struct range32 {
-	u32 min;
-	u32 max;
-};
-
-struct range64 {
-	u64 min;
-	u64 max;
-};
-
-bool range16_range8_intersect(struct range16 ra, struct range8 rb, struct range16 *out);
-bool range64_range32_intersect(struct range64 ra, struct range32 rb, struct range64 *out);
+struct cnum64 cnum64_cnum32_intersect(struct cnum64 a, struct cnum32 b);
 
 #endif /* _LINUX_CNUM_H */

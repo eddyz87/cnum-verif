@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: GPL-2.0-only
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2026 Meta Platforms, Inc. and affiliates. */
 
 #ifndef T
-#error "Define T (bit width: 8, 16, 32, 64) before including cnum_defs.h"
+#error "Define T (bit width: 32, 64) before including cnum_defs.h"
 #endif
 
 #include <linux/cnum.h>
@@ -10,17 +10,18 @@
 #include <linux/minmax.h>
 #include <linux/compiler_types.h>
 
-#define cnum_t  __PASTE(cnum, T)
-#define ut      __PASTE(u, T)
-#define st      __PASTE(s, T)
-#define UT_MAX  __PASTE(__PASTE(U, T), _MAX)
-#define ST_MAX  __PASTE(__PASTE(S, T), _MAX)
-#define ST_MIN  __PASTE(__PASTE(S, T), _MIN)
+#define cnum_t   __PASTE(cnum, T)
+#define ut       __PASTE(u, T)
+#define st       __PASTE(s, T)
+#define UT_MAX   __PASTE(__PASTE(U, T), _MAX)
+#define ST_MAX   __PASTE(__PASTE(S, T), _MAX)
+#define ST_MIN   __PASTE(__PASTE(S, T), _MIN)
+#define EMPTY    __PASTE(__PASTE(CNUM, T), _EMPTY)
 #define FN(name) __PASTE(__PASTE(cnum, T), __PASTE(_, name))
 
 struct cnum_t FN(from_urange)(ut min, ut max)
 {
-	return (struct cnum_t){ .base = min, .size = max - min };
+	return (struct cnum_t){ .base = min, .size = (ut)max - min };
 }
 
 struct cnum_t FN(from_srange)(st min, st max)
@@ -32,10 +33,10 @@ struct cnum_t FN(from_srange)(st min, st max)
 }
 
 /* True if this cnum represents two unsigned ranges. */
-static inline bool FN(urange_overflow)(struct cnum_t cnum)
+bool FN(urange_overflow)(struct cnum_t cnum)
 {
 	/* Same as cnum.base + cnum.size > UT_MAX but avoids overflow */
-	return cnum.size > UT_MAX - cnum.base;
+	return cnum.size > UT_MAX - (ut)cnum.base;
 }
 
 /*
@@ -54,7 +55,7 @@ ut FN(umax)(struct cnum_t cnum)
 }
 
 /* True if this cnum represents two signed ranges. */
-static inline bool FN(srange_overflow)(struct cnum_t cnum)
+bool FN(srange_overflow)(struct cnum_t cnum)
 {
 	return FN(contains)(cnum, (ut)ST_MAX) && FN(contains)(cnum, (ut)ST_MIN);
 }
@@ -86,10 +87,13 @@ st FN(smax)(struct cnum_t cnum)
  * - if intersection produces two ranges, returns smaller of
  *   'a' or 'b' in 'out'.
  */
-bool FN(intersect)(struct cnum_t a, struct cnum_t b, struct cnum_t *out)
+struct cnum_t FN(intersect)(struct cnum_t a, struct cnum_t b)
 {
 	struct cnum_t b1;
 	ut dbase;
+
+	if (FN(is_empty)(a) || FN(is_empty)(b))
+		return EMPTY;
 
 	if (a.base > b.base)
 		swap(a, b);
@@ -115,8 +119,7 @@ bool FN(intersect)(struct cnum_t a, struct cnum_t b, struct cnum_t *out)
 			 * can't represent as single cnum, over-approximate
 			 * the result.
 			 */
-			*out = a.size < b.size ? a : b;
-			return true;
+			return a.size <= b.size ? a : b;
 		} else {
 			/*
 			 * Rotated frame (a.base at origin):
@@ -129,9 +132,10 @@ bool FN(intersect)(struct cnum_t a, struct cnum_t b, struct cnum_t *out)
 			 *
 			 * Only 'b' tail intersects 'a'.
 			 */
-			out->base = a.base;
-			out->size = min(a.size, (ut)(b1.base + b1.size));
-			return true;
+			return (struct cnum_t) {
+				.base = a.base,
+				.size = min(a.size, (ut)(b1.base + b1.size)),
+			};
 		}
 	} else if (a.size >= b1.base) {
 		/*
@@ -151,22 +155,75 @@ bool FN(intersect)(struct cnum_t a, struct cnum_t b, struct cnum_t *out)
 		 *
 		 * 'a' and 'b' intersect as one cnum.
 		 */
-		out->base = b.base;
-		out->size = min((ut)(a.size - dbase), b.size);
-		return true;
+		return (struct cnum_t) {
+			.base = b.base,
+			.size = min((ut)(a.size - dbase), b.size),
+		};
 	} else {
-		return false;
+		return EMPTY;
 	}
+}
+
+void FN(intersect_with)(struct cnum_t *dst, struct cnum_t src)
+{
+	*dst = FN(intersect)(*dst, src);
+}
+
+void FN(intersect_with_urange)(struct cnum_t *dst, ut min, ut max)
+{
+	FN(intersect_with)(dst, FN(from_urange)(min, max));
+}
+
+void FN(intersect_with_srange)(struct cnum_t *dst, st min, st max)
+{
+	FN(intersect_with)(dst, FN(from_srange)(min, max));
+}
+
+struct cnum_t FN(normalize)(struct cnum_t cnum)
+{
+	if (cnum.size == UT_MAX && cnum.base != 0 && cnum.base != (ut)ST_MAX)
+		cnum.base = 0;
+	return cnum;
+}
+
+struct cnum_t FN(add)(struct cnum_t a, struct cnum_t b)
+{
+	if (FN(is_empty)(a) || FN(is_empty)(b))
+		return EMPTY;
+	if (a.size > UT_MAX - b.size)
+		return (struct cnum_t){ 0, (ut)UT_MAX };
+	else
+		return FN(normalize)((struct cnum_t){ a.base + b.base, a.size + b.size });
+}
+
+struct cnum_t FN(negate)(struct cnum_t a)
+{
+	if (FN(is_empty)(a))
+		return EMPTY;
+	return FN(normalize)((struct cnum_t){ -((ut)a.base + a.size), a.size });
+}
+
+bool FN(is_empty)(struct cnum_t cnum)
+{
+	return cnum.base == EMPTY.base && cnum.size == EMPTY.size;
 }
 
 bool FN(contains)(struct cnum_t cnum, ut v)
 {
+	if (FN(is_empty)(cnum))
+		return false;
 	if (FN(urange_overflow)(cnum))
-		return v >= cnum.base || v <= (ut)(cnum.base + cnum.size);
+		return v >= cnum.base || v <= (ut)cnum.base + cnum.size;
 	else
-		return v >= cnum.base && v <= (ut)(cnum.base + cnum.size);
+		return v >= cnum.base && v <= (ut)cnum.base + cnum.size;
 }
 
+bool FN(is_const)(struct cnum_t cnum)
+{
+	return cnum.size == 0;
+}
+
+#undef EMPTY
 #undef cnum_t
 #undef ut
 #undef st

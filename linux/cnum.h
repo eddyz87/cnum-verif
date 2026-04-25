@@ -51,6 +51,7 @@ struct cnum32 cnum32_normalize(struct cnum32 cnum);
 struct cnum32 cnum32_negate(struct cnum32 a);
 bool cnum32_urange_overflow(struct cnum32 a);
 bool cnum32_srange_overflow(struct cnum32 a);
+bool cnum32_is_subset(struct cnum32 bigger, struct cnum32 smaller);
 
 /* Same as cnum32 but for 64-bit ranges */
 struct cnum64 {
@@ -79,6 +80,7 @@ struct cnum64 cnum64_normalize(struct cnum64 cnum);
 struct cnum64 cnum64_negate(struct cnum64 a);
 bool cnum64_urange_overflow(struct cnum64 a);
 bool cnum64_srange_overflow(struct cnum64 a);
+bool cnum64_is_subset(struct cnum64 bigger, struct cnum64 smaller);
 
 struct cnum32 cnum32_from_cnum64(struct cnum64 cnum);
 struct cnum64 cnum64_cnum32_intersect(struct cnum64 a, struct cnum32 b);

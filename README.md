@@ -20,6 +20,7 @@ instantiated for 32-bit and 64-bit widths.
 | `is_empty`    | Only the `{UT_MAX, UT_MAX}` sentinel is empty                                    |
 | `contains`    | `contains(c, v)` iff `(ut)(v - c.base) <= c.size`                                |
 | `add`         | If `va` is in `a` and `vb` is in `b`, then `va + vb` is in `add(a, b)`           |
+| `is_subset`   | (1) If `is_subset(a, b)` and `v` is in `b`, then `v` is in `a`; (2) if `!is_subset(a, b)`, there exists `v` in `b` not in `a` |
 
 ### Cross-width checks
 

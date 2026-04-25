@@ -151,6 +151,30 @@ void CHECK(add)(void)
 	assert(FN(contains)(r, (ut)(a.base + b.base + da + db)));
 }
 
+void CHECK(is_subset_1)(void)
+{
+	struct cnum_t a = { nondet_ut(), nondet_ut() };
+	struct cnum_t b = { nondet_ut(), nondet_ut() };
+
+        __CPROVER_assume(FN(is_subset)(a, b));
+	ut v = nondet_ut();
+	__CPROVER_assume(FN(contains)(b, v));
+	assert(FN(contains)(a, v));
+}
+
+#define CONTAINS(c, v) ((ut)((v) - (c).base) <= (c).size)
+
+void CHECK(is_subset_2)(void)
+{
+	struct cnum_t a = (struct cnum_t){ nondet_ut(), nondet_ut() };
+	struct cnum_t b = (struct cnum_t){ nondet_ut(), nondet_ut() };
+
+	__CPROVER_assume(!FN(is_empty)(a));
+	__CPROVER_assume(!FN(is_empty)(b));
+	__CPROVER_assume(!FN(is_subset)(a, b));
+	assert(__CPROVER_exists { ut v; CONTAINS(b, v) && !CONTAINS(a, v) });
+}
+
 #undef cnum_t
 #undef ut
 #undef st

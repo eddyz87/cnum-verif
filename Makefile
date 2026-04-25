@@ -4,7 +4,7 @@ HEADERS = cnum_defs.h checks.h $(wildcard linux/*.h)
 SRCS = checks.c cnum.c
 CBMC = cbmc -I. $(SRCS)
 
-all: compile-check cbmc
+all: compile-check cbmc cbmc-smt2
 
 cbmc: $(SRCS) $(HEADERS)
 	parallel $(CBMC) --function ::: \
@@ -27,7 +27,14 @@ cbmc: $(SRCS) $(HEADERS)
 	 	 check_32_add \
 	 	 check_64_add \
 	 	 check_32_from_64 \
-	 	 check_64_32_intersect
+	 	 check_64_32_intersect \
+	 	 check_32_is_subset_1 \
+	 	 check_64_is_subset_1
+
+cbmc-smt2: $(SRCS) $(HEADERS)
+	parallel $(CBMC) --smt2 --function ::: \
+		 check_32_is_subset_2 \
+	 	 check_64_is_subset_2
 
 compile-check: $(SRCS) $(HEADERS)
 	bear -- $(CC) $(CFLAGS) -fsyntax-only checks.c
@@ -35,4 +42,4 @@ compile-check: $(SRCS) $(HEADERS)
 clean:
 	rm -f compile_commands.json mul8-brute-force
 
-.PHONY: all clean cbmc compile-check
+.PHONY: all clean cbmc cbmc-smt2 compile-check

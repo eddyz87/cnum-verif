@@ -8,6 +8,7 @@
 #include <linux/cnum.h>
 #include <linux/limits.h>
 #include <linux/minmax.h>
+#include <linux/overflow.h>
 #include <linux/compiler_types.h>
 
 #define cnum_t   __PASTE(cnum, T)
@@ -235,6 +236,21 @@ bool FN(is_subset)(struct cnum_t bigger, struct cnum_t smaller)
 	if (FN(urange_overflow)(smaller) && bigger.size < UT_MAX)
 		return false;
 	return smaller.base + smaller.size <= bigger.size;
+}
+
+struct cnum_t FN(intersect_linear)(struct cnum_t c, u16 base, u16 step)
+{
+	ut start = c.base;
+	ut end = c.base + c.size;
+	ut s = start % step;
+	ut e = end % step;
+	ut dstart = s > base ? base + step - s :  base - s;
+	ut dend = e < base ? e - base + step : e - base;
+
+	if (check_add_overflow(start, dstart, &start) ||
+	    check_sub_overflow(end, dend, &end))
+		return c;
+	return FN(intersect)(c, (struct cnum_t){ start, end - start });
 }
 
 #undef EMPTY

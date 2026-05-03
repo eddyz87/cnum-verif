@@ -25,6 +25,7 @@ void __CPROVER_assume(_Bool);
 #define nondet_st __PASTE(nondet_s, T)
 ut nondet_ut(void);
 st nondet_st(void);
+u16 nondet_u16(void);
 
 void CHECK(from_urange)(void)
 {
@@ -173,6 +174,22 @@ void CHECK(is_subset_2)(void)
 	__CPROVER_assume(!FN(is_empty)(b));
 	__CPROVER_assume(!FN(is_subset)(a, b));
 	assert(__CPROVER_exists { ut v; CONTAINS(b, v) && !CONTAINS(a, v) });
+}
+
+void CHECK(intersect_linear)(void)
+{
+	struct cnum_t a = (struct cnum_t){ nondet_ut(), nondet_ut() };
+	u16 b = nondet_u16();
+	u16 c = nondet_u16();
+	ut v = nondet_ut();
+	__CPROVER_assume(!FN(is_empty)(a));
+	__CPROVER_assume(c > 0);
+	__CPROVER_assume(c < 8);
+	__CPROVER_assume(b < c);
+	__CPROVER_assume(v % c == b);
+	__CPROVER_assume(FN(contains)(a, v));
+	struct cnum_t i = FN(intersect_linear)(a, b, c);
+	assert(FN(contains)(i, v));
 }
 
 #undef cnum_t

@@ -68,16 +68,12 @@ bool FN(srange_overflow)(struct cnum_t cnum)
  */
 st FN(smin)(struct cnum_t cnum)
 {
-	return FN(srange_overflow)(cnum)
-	       ? ST_MIN
-	       : min((st)cnum.base, (st)(cnum.base + cnum.size));
+	return FN(srange_overflow)(cnum) ? ST_MIN : (st)cnum.base;
 }
 
 st FN(smax)(struct cnum_t cnum)
 {
-	return FN(srange_overflow)(cnum)
-	       ? ST_MAX
-	       : max((st)cnum.base, (st)(cnum.base + cnum.size));
+	return FN(srange_overflow)(cnum) ? ST_MAX : (st)(cnum.base + cnum.size);
 }
 
 /*
